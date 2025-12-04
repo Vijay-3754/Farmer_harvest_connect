@@ -57,9 +57,13 @@ src_mern/
 
 4. Create a `.env` file in the backend directory with your MongoDB connection string and JWT secret:
    ```
-   MONGODB_URI=your_mongodb_connection_string
+   CONNECTION_STRING=your_mongodb_connection_string
    JWT_SECRET=your_jwt_secret
    API_URL=/api/v1
+   PORT=4000
+   LICENSE_CODE=your_license_code           # optional: overrides helpers/config.json
+   LICENSE_DEVICE_ID=your_license_device_id # optional: overrides helpers/config.json
+   LICENSE_CHECK_DISABLED=false             # set true to bypass license gate (e.g. on Render)
    ```
 
 5. Start the backend server:
@@ -72,6 +76,14 @@ src_mern/
    cd ../client
    npm start
    ```
+
+## Deploying the Backend to Render
+
+1. Push the latest code to GitHub.
+2. In the Render dashboard, create a **Web Service** pointing to this repo and set the root directory to `backend`.
+3. Use `npm install` as the build command and `npm start` as the start command.
+4. In the Render Environment tab, add the variables listed above (`CONNECTION_STRING`, `JWT_SECRET`, `API_URL`, optional license variables, and `LICENSE_CHECK_DISABLED=true` if you want to bypass the machine check in the cloud).
+5. Deploy the service. Render assigns a public URL such as `https://your-app.onrender.com`; use that URL for the frontend’s API base.
 
 ## Contributing
 

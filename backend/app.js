@@ -12,40 +12,68 @@ const configPath = path.resolve(__dirname, 'helpers', 'config.json');
 
 const machineId = require('node-machine-id');
 let machineID; // Declare machineID variable
-let license = "u3Y65£,;7Y#I";
+const defaultLicense = {
+  licenseCode: 'u3Y65£,;7Y#I',
+  deviceId: '1e6c538423cab15a413bd87c33c15c1df9772aeb722e1aaec74429aaa7a4b139'
+};
+
+const LICENSE_CHECK_DISABLED = process.env.LICENSE_CHECK_DISABLED === 'true';
+
+let licenseConfig = { ...defaultLicense };
+
+// Load license config once so we can fall back if env vars are missing
+fs.readFile(configPath, 'utf-8')
+  .then((data) => {
+    const parsed = JSON.parse(data);
+    if (parsed?.license) {
+      licenseConfig = {
+        licenseCode: parsed.license.licenseCode || defaultLicense.licenseCode,
+        deviceId: parsed.license.deviceId || defaultLicense.deviceId,
+      };
+    }
+  })
+  .catch(() => {
+    console.warn('License config file missing; relying on environment variables.');
+  });
+
+const getEffectiveLicense = () => ({
+  licenseCode: process.env.LICENSE_CODE || licenseConfig.licenseCode,
+  deviceId: process.env.LICENSE_DEVICE_ID || licenseConfig.deviceId,
+});
 
 // Get the machine ID
 machineId.machineId()
   .then(id => {
     machineID = id;
-    //console.log('Machine ID:', id);
-    //console.log('license ID:', license);
   })
   .catch(error => {
     console.error('Error getting machine ID:', error);
   });
 
-
-
 // Middleware to check for a valid license
 app.use(async (req, res, next) => {
-  try {
-    const configData = await fs.readFile(configPath, 'utf-8');
-    const config = JSON.parse(configData);
-    const storedLicense = config.license;
-
-    if (storedLicense.licenseCode === license && storedLicense.deviceId === machineID) {
-      //console.log('Valid license');
-      next();
-      // Send a success response
-      //return res.json({ message: 'Valid license' });
-    }
-
-
-  } catch (error) {
-    console.error('Invalid or missing license information. Please verify the license.');
-    process.exit(1); // Exit the application if the license is not valid
+  if (LICENSE_CHECK_DISABLED) {
+    return next();
   }
+
+  const effectiveLicense = getEffectiveLicense();
+
+  if (!effectiveLicense.licenseCode || !effectiveLicense.deviceId) {
+    console.error('License configuration missing. Set LICENSE_CODE and LICENSE_DEVICE_ID or provide helpers/config.json.');
+    return res.status(500).json({ message: 'Server license configuration error' });
+  }
+
+  if (!machineID) {
+    console.error('Machine ID not available yet. Rejecting request.');
+    return res.status(503).json({ message: 'License validation pending' });
+  }
+
+  if (effectiveLicense.deviceId === machineID) {
+    return next();
+  }
+
+  console.error('Invalid license or device ID. Request blocked.');
+  return res.status(403).json({ message: 'Invalid license' });
 });
 
 
@@ -113,10 +141,11 @@ mongoose.connect(process.env.CONNECTION_STRING, {
     console.log(err);
   })
 
-//Server
-app.listen(4000, () => {
+const PORT = process.env.PORT || 4000;
 
-  console.log('server is running http://localhost:4000');
+//Server
+app.listen(PORT, () => {
+  console.log(`server is running on port ${PORT}`);
 })
 
 {/*
